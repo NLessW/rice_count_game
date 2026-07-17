@@ -5,11 +5,12 @@ import { getAdminDb, getUserFromToken } from '@/lib/firebaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const MIN_ACTION_INTERVAL_MS = 140;
+
 export async function POST(request) {
     try {
-        const { sessionId, name, idToken } = await request.json();
-        const safeName = String(name || '').trim().slice(0, 12);
-        if (!sessionId || !safeName) {
+        const { sessionId, idToken } = await request.json();
+        if (!sessionId) {
             return NextResponse.json({ error: 'invalid-request' }, { status: 400 });
         }
 
@@ -21,40 +22,31 @@ export async function POST(request) {
             if (!snapshot.exists) return { missing: true };
 
             const session = snapshot.data();
-            if (
-                session.status !== 'won' ||
-                session.registered ||
-                session.rankEligible === false ||
-                (session.actionCount || 0) < (session.minimumRankActions || 80)
-            ) {
-                return { rejected: true };
+            if (session.status !== 'active') return { ok: false };
+
+            const now = Date.now();
+            const lastActionAt = session.lastActionAt || 0;
+            if (now - lastActionAt < MIN_ACTION_INTERVAL_MS) {
+                return { ok: true, counted: false };
             }
 
-            transaction.set(adminDb.collection('rankings').doc(), {
-                name: safeName,
-                difficulty: session.difficulty,
-                seconds: session.seconds,
-                ...(user ? { userId: user.uid } : {}),
-                createdAt: FieldValue.serverTimestamp(),
-            });
             transaction.update(sessionRef, {
-                registered: true,
-                registeredAt: FieldValue.serverTimestamp(),
+                actionCount: (session.actionCount || 0) + 1,
+                lastActionAt: now,
+                lastActionRecordedAt: FieldValue.serverTimestamp(),
+                ...(user ? { userId: user.uid } : {}),
             });
 
-            return { ok: true, difficulty: session.difficulty };
+            return { ok: true, counted: true };
         });
 
         if (result.missing) {
             return NextResponse.json({ error: 'not-found' }, { status: 404 });
         }
-        if (result.rejected) {
-            return NextResponse.json({ error: 'not-eligible' }, { status: 409 });
-        }
 
         return NextResponse.json(result);
     } catch (error) {
-        console.error('game/register failed', error);
+        console.error('game/action failed', error);
         return NextResponse.json(
             { error: 'server-unavailable' },
             { status: 503 },

@@ -11,6 +11,7 @@ import {
     logIn,
     logOut,
     observeAuth,
+    recordGameAction,
     registerGameSessionScore,
     saveGameState,
     signUp,
@@ -414,6 +415,11 @@ function RiceCanvas({
         const rect = canvasRef.current.getBoundingClientRect();
         const grain = { x: p.x, y: p.y };
         const actionStartedAt = Date.now();
+        const bowlRx = Math.min(rect.width * 0.25, 210) / rect.width;
+        const bowlRy = Math.min(rect.height * 0.25, 145) / rect.height;
+        const dx = grain.x - game.bowl.x;
+        const dy = grain.y - game.bowl.y;
+        const inBowl = (dx / bowlRx) ** 2 + (dy / bowlRy) ** 2 < 1;
 
         pointerRef.current = grain;
         lockChopstickAnimation(actionStartedAt);
@@ -422,11 +428,6 @@ function RiceCanvas({
             if (!g || g.held === null) return g;
 
             const rice = riceRef.current[g.held];
-            const bowlRx = Math.min(rect.width * 0.25, 210) / rect.width;
-            const bowlRy = Math.min(rect.height * 0.25, 145) / rect.height;
-            const dx = grain.x - g.bowl.x;
-            const dy = grain.y - g.bowl.y;
-            const inBowl = (dx / bowlRx) ** 2 + (dy / bowlRy) ** 2 < 1;
 
             Object.assign(
                 rice,
@@ -444,6 +445,9 @@ function RiceCanvas({
                 chopstickAction: actionStartedAt,
             };
         });
+        if (!inBowl) {
+            recordGameAction(game.sessionId).catch(() => {});
+        }
     };
 
     const onMove = (event) => {
@@ -690,6 +694,7 @@ export default function Home() {
     const [myResults, setMyResults] = useState([]);
     const [savedGame, setSavedGame] = useState(null);
     const [saveStatus, setSaveStatus] = useState('');
+    const [registerError, setRegisterError] = useState('');
     const [guestName, setGuestName] = useState('');
     const riceApiRef = useRef(null);
 
@@ -745,6 +750,7 @@ export default function Home() {
         setElapsed(0);
         setResult(null);
         setRevealedAnswer(null);
+        setRegisterError('');
         setChecking(false);
         setForfeitRequest(0);
         setGiveUpStep(0);
@@ -837,7 +843,15 @@ export default function Home() {
             ? user.displayName || user.email?.split('@')[0] || '관찰자'
             : guestName.trim();
         if (!playerName) return;
-        await registerGameSessionScore(game.sessionId, playerName);
+        setRegisterError('');
+        try {
+            await registerGameSessionScore(game.sessionId, playerName);
+        } catch {
+            setRegisterError(
+                '랭킹 등록 조건을 통과하지 못했습니다. 쌀을 직접 옮기며 다시 도전해 주세요.',
+            );
+            return;
+        }
         setRankMode(game.difficulty);
         setGuestName('');
         setScreen('rank');
@@ -1399,6 +1413,11 @@ export default function Home() {
                                                     비회원 기록 등록
                                                 </button>
                                             </>
+                                        )}
+                                        {registerError && (
+                                            <div className="toast">
+                                                {registerError}
+                                            </div>
                                         )}
                                     </>
                                 ) : (
