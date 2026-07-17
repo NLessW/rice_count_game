@@ -314,9 +314,9 @@ function RiceCanvas({
                 bowl.y,
                 bowl.rx,
             );
-            glow.addColorStop(0, '#fffdf3');
-            glow.addColorStop(0.72, '#ded8c7');
-            glow.addColorStop(1, '#958c7e');
+            glow.addColorStop(0, '#4a4a47');
+            glow.addColorStop(0.62, '#1f211f');
+            glow.addColorStop(1, '#050606');
             sceneCtx.fillStyle = glow;
             sceneCtx.beginPath();
             sceneCtx.ellipse(
@@ -329,7 +329,7 @@ function RiceCanvas({
                 Math.PI * 2,
             );
             sceneCtx.fill();
-            sceneCtx.strokeStyle = '#f5f0df';
+            sceneCtx.strokeStyle = '#6c6c66';
             sceneCtx.lineWidth = 12;
             sceneCtx.stroke();
 
