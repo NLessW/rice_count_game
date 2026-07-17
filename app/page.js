@@ -123,7 +123,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 rice.place === 'bowl'
                     ? currentGame.bowl.y * rect.height + rice.by * bowlRy
                     : rice.y * rect.height;
-            if (Math.hypot(clickX - x, clickY - y) <= 8) return { rice, x, y };
+            if (Math.hypot(clickX - x, clickY - y) <= 10) return { rice, x, y };
         }
 
         return null;
@@ -162,7 +162,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             target.shadowColor = selected ? '#2699e8' : 'rgba(80,55,20,.2)';
             target.shadowBlur = selected ? 12 : 2;
             target.beginPath();
-            target.ellipse(0, 0, 5.6, 2.2, 0, 0, Math.PI * 2);
+            target.ellipse(0, 0, 7, 2.8, 0, 0, Math.PI * 2);
             target.fill();
             target.restore();
         };
@@ -236,7 +236,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             ctx.translate(target.x, target.y);
             ctx.rotate(target.rice.rotation);
             ctx.beginPath();
-            ctx.ellipse(0, 0, 8.5, 4.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, 10.5, 5.2, 0, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
@@ -255,8 +255,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             ctx.ellipse(
                 pointer.x * w,
                 pointer.y * h,
-                6.6,
-                3,
+                8.2,
+                3.8,
                 game.heldRotation,
                 0,
                 Math.PI * 2,
