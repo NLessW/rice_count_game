@@ -426,7 +426,12 @@ export default function Home() {
     const [giveUpStep, setGiveUpStep] = useState(0);
     const [user, setUser] = useState(null);
     const [authMode, setAuthMode] = useState('login');
-    const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
+    const [authForm, setAuthForm] = useState({
+        name: '',
+        email: '',
+        password: '',
+        passwordConfirm: '',
+    });
     const [authError, setAuthError] = useState('');
     const [authBusy, setAuthBusy] = useState(false);
     const [myResults, setMyResults] = useState([]);
@@ -595,6 +600,13 @@ export default function Home() {
 
     const submitAuth = async (event) => {
         event.preventDefault();
+        if (
+            authMode === 'signup' &&
+            authForm.password !== authForm.passwordConfirm
+        ) {
+            setAuthError('비밀번호가 서로 일치하지 않습니다.');
+            return;
+        }
         setAuthBusy(true);
         setAuthError('');
         try {
@@ -602,7 +614,12 @@ export default function Home() {
                 ? await signUp(authForm)
                 : await logIn(authForm);
             setUser(authenticated);
-            setAuthForm({ name: '', email: '', password: '' });
+            setAuthForm({
+                name: '',
+                email: '',
+                password: '',
+                passwordConfirm: '',
+            });
             setScreen(result === 'success' ? 'game' : 'account');
         } catch (error) {
             const code = error?.code || '';
@@ -619,7 +636,7 @@ export default function Home() {
                       ? '이메일 또는 비밀번호가 올바르지 않습니다.'
                       : code.includes('weak-password')
                         ? '비밀번호는 6자 이상이어야 합니다.'
-                        : '인증에 실패했습니다. 입력 내용을 확인해 주세요.',
+                        : `인증에 실패했습니다. (${code || 'unknown'})`,
             );
         } finally {
             setAuthBusy(false);
@@ -780,6 +797,21 @@ export default function Home() {
                             required
                             placeholder="비밀번호 (6자 이상)"
                         />
+                        {authMode === 'signup' && (
+                            <input
+                                type="password"
+                                value={authForm.passwordConfirm}
+                                onChange={(event) =>
+                                    setAuthForm((form) => ({
+                                        ...form,
+                                        passwordConfirm: event.target.value,
+                                    }))
+                                }
+                                minLength={6}
+                                required
+                                placeholder="비밀번호 확인"
+                            />
+                        )}
                         {authError && <div className="toast">{authError}</div>}
                         <button className="primary full" disabled={authBusy}>
                             {authBusy
