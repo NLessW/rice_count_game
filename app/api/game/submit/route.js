@@ -28,13 +28,23 @@ export async function POST(request) {
             const seconds = Number(
                 ((Date.now() - session.startedAt) / 1000).toFixed(3),
             );
+            const attempts = (session.attempts || 0) + 1;
             const correct = numericGuess === session.answer;
+            transaction.update(sessionRef, {
+                attempts,
+                lastAttemptAt: FieldValue.serverTimestamp(),
+            });
             if (!correct) return { correct: false };
 
             if (session.status !== 'won') {
+                const rankEligible =
+                    seconds >= (session.minimumRankSeconds || 60) &&
+                    attempts <= 8;
                 transaction.update(sessionRef, {
                     status: 'won',
                     seconds,
+                    attempts,
+                    rankEligible,
                     wonAt: FieldValue.serverTimestamp(),
                     ...(user ? { userId: user.uid } : {}),
                 });
@@ -53,6 +63,11 @@ export async function POST(request) {
             return {
                 correct: true,
                 seconds: session.status === 'won' ? session.seconds : seconds,
+                rankEligible:
+                    session.status === 'won'
+                        ? session.rankEligible !== false
+                        : seconds >= (session.minimumRankSeconds || 60) &&
+                          attempts <= 8,
             };
         });
 

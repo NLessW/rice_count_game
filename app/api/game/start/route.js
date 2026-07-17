@@ -1,7 +1,7 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
 import { getAdminDb, getUserFromToken } from '@/lib/firebaseAdmin';
-import { createRiceGame, GAME_MODES } from '@/lib/gameServer';
+import { createRiceGame, GAME_MODES, minimumRankSeconds } from '@/lib/gameServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,6 +25,8 @@ export async function POST(request) {
             difficulty,
             answer: game.answer,
             startedAt,
+            attempts: 0,
+            minimumRankSeconds: minimumRankSeconds(difficulty),
             status: 'active',
             registered: false,
             ...(user ? { userId: user.uid } : {}),
@@ -35,6 +37,7 @@ export async function POST(request) {
             sessionId: game.sessionId,
             difficulty,
             startedAt,
+            riceKey: game.packetKey,
             riceData: game.riceData,
         });
     } catch (error) {

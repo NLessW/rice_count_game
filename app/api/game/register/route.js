@@ -21,7 +21,11 @@ export async function POST(request) {
             if (!snapshot.exists) return { missing: true };
 
             const session = snapshot.data();
-            if (session.status !== 'won' || session.registered) {
+            if (
+                session.status !== 'won' ||
+                session.registered ||
+                session.rankEligible === false
+            ) {
                 return { rejected: true };
             }
 

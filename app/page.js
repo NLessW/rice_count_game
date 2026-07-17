@@ -17,6 +17,7 @@ import {
     startGameSession,
     submitGameGuess,
 } from '@/lib/firebase';
+import { packRiceData, unpackRiceData } from '@/lib/ricePacket';
 
 const MODES = {
     easy: { label: '쉬움', range: '1,000–2,000', min: 1000, max: 2000 },
@@ -78,7 +79,7 @@ function RiceCanvas({
 
     riceApiRef.current = {
         serialize: () =>
-            riceRef.current.flatMap((rice) => {
+            packRiceData(riceRef.current.map((rice) => {
                 const place =
                     rice.place === 'bowl'
                         ? 0
@@ -95,19 +96,16 @@ function RiceCanvas({
                     Number(second.toFixed(5)),
                     Number(rice.rotation.toFixed(5)),
                 ];
-            }),
+            }), game.riceKey),
     };
 
     useEffect(() => {
         if (!game) return;
         pointerRef.current = game.pointer;
         terminalRef.current = false;
-        if (game.riceData?.length) {
-            const restored = Array.from(
-                { length: game.riceData.length / 4 },
-                (_, id) => {
-                    const offset = id * 4;
-                    const placeCode = game.riceData[offset];
+        if (game.riceData?.length && game.riceKey?.length) {
+            const restored = unpackRiceData(game.riceData, game.riceKey).map(
+                ({ id, place: placeCode, first, second, rotation }) => {
                     const place =
                         placeCode === 0
                             ? 'bowl'
@@ -119,14 +117,14 @@ function RiceCanvas({
                     const rice = {
                         id,
                         place,
-                        rotation: game.riceData[offset + 3],
+                        rotation,
                     };
                     if (place === 'bowl') {
-                        rice.bx = game.riceData[offset + 1];
-                        rice.by = game.riceData[offset + 2];
+                        rice.bx = first;
+                        rice.by = second;
                     } else {
-                        rice.x = game.riceData[offset + 1];
-                        rice.y = game.riceData[offset + 2];
+                        rice.x = first;
+                        rice.y = second;
                     }
                     return rice;
                 },
@@ -388,6 +386,22 @@ function RiceCanvas({
         };
     }, [paint, game.chopstickAction]);
 
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const handleWheel = (event) => {
+            event.preventDefault();
+            if (game.held === null) return;
+            setGame((g) => ({
+                ...g,
+                heldRotation: g.heldRotation + Math.sign(event.deltaY) * 0.18,
+            }));
+        };
+
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
+        return () => canvas.removeEventListener('wheel', handleWheel);
+    }, [game.held, setGame]);
+
     const point = (event) => {
         const rect = canvasRef.current.getBoundingClientRect();
         return {
@@ -549,15 +563,6 @@ function RiceCanvas({
             onPointerMove={onMove}
             onPointerDown={onDown}
             onPointerUp={onUp}
-            onWheel={(event) => {
-                event.preventDefault();
-                if (game.held === null) return;
-                setGame((g) => ({
-                    ...g,
-                    heldRotation:
-                        g.heldRotation + Math.sign(event.deltaY) * 0.18,
-                }));
-            }}
         />
     );
 }
@@ -748,6 +753,7 @@ export default function Home() {
             sessionId: session.sessionId,
             difficulty,
             startedAt: session.startedAt,
+            riceKey: session.riceKey,
             bowl: { x: 0.48, y: 0.52 },
             pointer: { x: 0.72, y: 0.38 },
             held: null,
@@ -845,6 +851,7 @@ export default function Home() {
             const state = {
                 difficulty: game.difficulty,
                 sessionId: game.sessionId,
+                riceKey: game.riceKey,
                 elapsed: Number(currentElapsed.toFixed(3)),
                 bowl: game.bowl,
                 pointer: riceApiRef.current.getPointer(),
@@ -863,7 +870,7 @@ export default function Home() {
 
     const resumeSavedGame = () => {
         if (!savedGame) return;
-        if (!savedGame.sessionId) {
+        if (!savedGame.sessionId || !savedGame.riceKey) {
             setStartError(
                 '이전 방식의 저장 데이터는 서버 검증 세션이 없어 이어갈 수 없습니다. 새 게임을 시작해 주세요.',
             );
@@ -883,6 +890,7 @@ export default function Home() {
             sessionId: savedGame.sessionId,
             difficulty: savedGame.difficulty,
             startedAt: Date.now() - savedGame.elapsed * 1000,
+            riceKey: savedGame.riceKey,
             bowl: savedGame.bowl,
             pointer: savedGame.pointer,
             held: savedGame.held,
