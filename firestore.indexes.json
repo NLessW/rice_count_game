@@ -1,0 +1,25 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "rankings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "difficulty",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "seconds",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "gameSaves",
+      "fieldPath": "riceData",
+      "indexes": []
+    }
+  ]
+}
