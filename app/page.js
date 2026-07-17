@@ -27,7 +27,6 @@ const MODES = {
 };
 
 const CHOPSTICK_ANIMATION_MS = 700;
-const RICE_SLOT_COUNT = 8000;
 const RICE_SAVE_SNAPSHOT = Symbol('rice-save-snapshot');
 const riceSessionKeys = new Map();
 const formatTime = (seconds) => {
@@ -147,15 +146,6 @@ function RiceCanvas({
                     return rice;
                 },
             );
-            while (restored.length < RICE_SLOT_COUNT) {
-                restored.push({
-                    id: restored.length,
-                    place: 'void',
-                    rotation: Math.random() * Math.PI,
-                    x: Math.random(),
-                    y: Math.random(),
-                });
-            }
             riceRef.current = restored;
             sceneDirtyRef.current = true;
             return;
