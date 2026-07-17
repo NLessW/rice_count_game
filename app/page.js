@@ -28,6 +28,8 @@ const MODES = {
 
 const CHOPSTICK_ANIMATION_MS = 700;
 const RICE_SLOT_COUNT = 8000;
+const RICE_SAVE_SNAPSHOT = Symbol('rice-save-snapshot');
+const riceSessionKeys = new Map();
 const formatTime = (seconds) => {
     const wholeSeconds = Math.floor(seconds);
     return `${String(Math.floor(wholeSeconds / 3600)).padStart(2, '0')}:${String(Math.floor((wholeSeconds % 3600) / 60)).padStart(2, '0')}:${String(wholeSeconds % 60).padStart(2, '0')}`;
@@ -62,6 +64,7 @@ function RiceCanvas({
     const paintFrameRef = useRef(null);
     const terminalRef = useRef(false);
     const animationLockUntilRef = useRef(0);
+    const riceKeyRef = useRef(null);
 
     const isChopstickAnimating = (currentGame = game) =>
         Boolean(
@@ -79,8 +82,8 @@ function RiceCanvas({
     };
 
     riceApiRef.current = {
-        serialize: () =>
-            packRiceData(riceRef.current.map((rice) => {
+        serialize: () => {
+            const rows = riceRef.current.map((rice) => {
                 const place =
                     rice.place === 'bowl'
                         ? 0
@@ -97,15 +100,29 @@ function RiceCanvas({
                     Number(second.toFixed(5)),
                     Number(rice.rotation.toFixed(5)),
                 ];
-            }), game.riceKey),
+            });
+            return packRiceData(rows, riceKeyRef.current);
+        },
     };
+    Object.defineProperty(riceApiRef.current, RICE_SAVE_SNAPSHOT, {
+        value: () => ({
+            riceData: riceApiRef.current.serialize(),
+            riceKey: riceKeyRef.current,
+        }),
+        enumerable: false,
+        configurable: true,
+    });
 
     useEffect(() => {
         if (!game) return;
         pointerRef.current = game.pointer;
         terminalRef.current = false;
-        if (game.riceData?.length && game.riceKey?.length) {
-            const restored = unpackRiceData(game.riceData, game.riceKey).map(
+        const storedRiceKey = riceSessionKeys.get(game.sessionId);
+        if (storedRiceKey?.length) {
+            riceKeyRef.current = storedRiceKey;
+        }
+        if (game.riceData?.length && riceKeyRef.current?.length) {
+            const restored = unpackRiceData(game.riceData, riceKeyRef.current).map(
                 ({ id, place: placeCode, first, second, rotation }) => {
                     const place =
                         placeCode === 0
@@ -145,7 +162,7 @@ function RiceCanvas({
         }
         riceRef.current = [];
         sceneDirtyRef.current = true;
-    }, [game?.id, game?.riceData]);
+    }, [game?.id, game?.sessionId, game?.riceData]);
 
     useEffect(() => {
         if (!forfeitRequest || terminalRef.current) return;
@@ -754,12 +771,12 @@ export default function Home() {
         setChecking(false);
         setForfeitRequest(0);
         setGiveUpStep(0);
+        riceSessionKeys.set(session.sessionId, session.riceKey);
         setGame({
             id: session.sessionId,
             sessionId: session.sessionId,
             difficulty,
             startedAt: session.startedAt,
-            riceKey: session.riceKey,
             bowl: { x: 0.48, y: 0.52 },
             pointer: { x: 0.72, y: 0.38 },
             held: null,
@@ -862,17 +879,18 @@ export default function Home() {
         setSaveStatus('저장 중...');
         try {
             const currentElapsed = (Date.now() - game.startedAt) / 1000;
+            const riceSnapshot = riceApiRef.current[RICE_SAVE_SNAPSHOT]();
             const state = {
                 difficulty: game.difficulty,
                 sessionId: game.sessionId,
-                riceKey: game.riceKey,
+                riceKey: riceSnapshot.riceKey,
                 elapsed: Number(currentElapsed.toFixed(3)),
                 bowl: game.bowl,
                 pointer: riceApiRef.current.getPointer(),
                 held: game.held,
                 heldRotation: game.heldRotation,
                 moved: game.moved,
-                riceData: riceApiRef.current.serialize(),
+                riceData: riceSnapshot.riceData,
             };
             await saveGameState(user.uid, state);
             setSavedGame(state);
@@ -899,12 +917,12 @@ export default function Home() {
         setForfeitRequest(0);
         setGiveUpStep(0);
         setSaveStatus('');
+        riceSessionKeys.set(savedGame.sessionId, savedGame.riceKey);
         setGame({
             id: Date.now(),
             sessionId: savedGame.sessionId,
             difficulty: savedGame.difficulty,
             startedAt: Date.now() - savedGame.elapsed * 1000,
-            riceKey: savedGame.riceKey,
             bowl: savedGame.bowl,
             pointer: savedGame.pointer,
             held: savedGame.held,
