@@ -731,6 +731,21 @@ export default function Home() {
                 <section className="panel">
                     <p className="eyebrow">난이도 선택</p>
                     <h2>내 집중력은 어느정도일까요?</h2>
+                    {user && savedGame && (
+                        <div className="saved-game-card start-save-card">
+                            <div>
+                                <p className="eyebrow">저장된 게임</p>
+                                <h3>
+                                    {MODES[savedGame.difficulty]?.label} ·{' '}
+                                    {formatTime(savedGame.elapsed)}부터
+                                </h3>
+                                <p>쌀알과 그릇 위치까지 저장한 상태로 이어집니다.</p>
+                            </div>
+                            <button className="primary" onClick={resumeSavedGame}>
+                                이어서 하기
+                            </button>
+                        </div>
+                    )}
                     <div className="mode-grid">
                         {Object.entries(MODES).map(([key, mode], index) => (
                             <button
