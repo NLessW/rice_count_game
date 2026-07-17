@@ -24,6 +24,45 @@ const MODES = {
 
 const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const CHOPSTICK_ANIMATION_MS = 700;
+const RICE_SLOT_COUNT = 8000;
+const PBKDF2_ITERATIONS = 180000;
+
+const bytesToHex = (bytes) =>
+    Array.from(new Uint8Array(bytes), (byte) =>
+        byte.toString(16).padStart(2, '0'),
+    ).join('');
+
+async function deriveAnswerProof(guess, salt, nonce) {
+    const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(`${guess}:${nonce}`),
+        'PBKDF2',
+        false,
+        ['deriveBits'],
+    );
+    return bytesToHex(
+        await crypto.subtle.deriveBits(
+            {
+                name: 'PBKDF2',
+                hash: 'SHA-256',
+                salt,
+                iterations: PBKDF2_ITERATIONS,
+            },
+            key,
+            256,
+        ),
+    );
+}
+
+async function createAnswerProof(answer) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const nonce = `${Date.now()}:${crypto.getRandomValues(new Uint32Array(1))[0]}`;
+    return {
+        salt,
+        nonce,
+        digest: await deriveAnswerProof(answer, salt, nonce),
+    };
+}
 const formatTime = (seconds) => {
     const wholeSeconds = Math.floor(seconds);
     return `${String(Math.floor(wholeSeconds / 3600)).padStart(2, '0')}:${String(Math.floor((wholeSeconds % 3600) / 60)).padStart(2, '0')}:${String(wholeSeconds % 60).padStart(2, '0')}`;
@@ -42,7 +81,13 @@ const giveUpTaunt = (seconds) => {
     return '시간을 이만큼이나 들여놓고 마지막 결론이 포기라니, 정말 이대로 끝낼 건가요?';
 };
 
-function RiceCanvas({ game, setGame, riceApiRef }) {
+function RiceCanvas({
+    game,
+    setGame,
+    riceApiRef,
+    forfeitRequest,
+    onForfeitResolved,
+}) {
     const canvasRef = useRef(null);
     const sceneRef = useRef(null);
     const sceneDirtyRef = useRef(true);
@@ -50,11 +95,20 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     const riceRef = useRef([]);
     const pointerRef = useRef(game.pointer);
     const paintFrameRef = useRef(null);
+    const proofRef = useRef(null);
+    const terminalRef = useRef(false);
 
     riceApiRef.current = {
         serialize: () =>
             riceRef.current.flatMap((rice) => {
-                const place = rice.place === 'bowl' ? 0 : rice.place === 'desk' ? 1 : 2;
+                const place =
+                    rice.place === 'bowl'
+                        ? 0
+                        : rice.place === 'desk'
+                          ? 1
+                          : rice.place === 'held'
+                            ? 2
+                            : 3;
                 const first = rice.place === 'bowl' ? rice.bx : rice.x || 0;
                 const second = rice.place === 'bowl' ? rice.by : rice.y || 0;
                 return [
@@ -69,13 +123,21 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     useEffect(() => {
         if (!game) return;
         pointerRef.current = game.pointer;
+        terminalRef.current = false;
         if (game.riceData?.length) {
-            riceRef.current = Array.from(
+            const restored = Array.from(
                 { length: game.riceData.length / 4 },
                 (_, id) => {
                     const offset = id * 4;
                     const placeCode = game.riceData[offset];
-                    const place = placeCode === 0 ? 'bowl' : placeCode === 1 ? 'desk' : 'held';
+                    const place =
+                        placeCode === 0
+                            ? 'bowl'
+                            : placeCode === 1
+                              ? 'desk'
+                              : placeCode === 2
+                                ? 'held'
+                                : 'void';
                     const rice = {
                         id,
                         place,
@@ -91,12 +153,36 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                     return rice;
                 },
             );
+            while (restored.length < RICE_SLOT_COUNT) {
+                restored.push({
+                    id: restored.length,
+                    place: 'void',
+                    rotation: Math.random() * Math.PI,
+                    x: Math.random(),
+                    y: Math.random(),
+                });
+            }
+            riceRef.current = restored;
+            const restoredCount = restored.reduce(
+                (count, rice) => count + (rice.place === 'void' ? 0 : 1),
+                0,
+            );
+            proofRef.current = createAnswerProof(restoredCount);
             sceneDirtyRef.current = true;
             return;
         }
         const mode = MODES[game.difficulty];
         const riceCount = random(mode.min, mode.max);
-        const seeded = Array.from({ length: riceCount }, (_, id) => {
+        const seeded = Array.from({ length: RICE_SLOT_COUNT }, (_, id) => {
+            if (id >= riceCount) {
+                return {
+                    id,
+                    x: Math.random(),
+                    y: Math.random(),
+                    rotation: Math.random() * Math.PI,
+                    place: 'void',
+                };
+            }
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.sqrt(Math.random()) * 0.82;
             return {
@@ -107,9 +193,27 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 place: 'bowl',
             };
         });
+        for (let index = seeded.length - 1; index > 0; index -= 1) {
+            const swapIndex = random(0, index);
+            [seeded[index], seeded[swapIndex]] = [seeded[swapIndex], seeded[index]];
+        }
+        seeded.forEach((rice, id) => {
+            rice.id = id;
+        });
         riceRef.current = seeded;
+        proofRef.current = createAnswerProof(riceCount);
         sceneDirtyRef.current = true;
     }, [game?.id, game?.riceData]);
+
+    useEffect(() => {
+        if (!forfeitRequest || terminalRef.current) return;
+        terminalRef.current = true;
+        const answer = riceRef.current.reduce(
+            (count, rice) => count + (rice.place === 'void' ? 0 : 1),
+            0,
+        );
+        onForfeitResolved(answer);
+    }, [forfeitRequest, onForfeitResolved]);
 
     const findRiceAt = (p, currentGame, rect) => {
         const bowlRx = Math.min(rect.width * 0.25, 210);
@@ -214,7 +318,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             sceneCtx.stroke();
 
             riceRef.current.forEach((rice) => {
-                if (rice.place === 'held') return;
+                if (rice.place === 'held' || rice.place === 'void') return;
                 const x =
                     rice.place === 'bowl'
                         ? bowl.x + rice.bx * bowl.rx
@@ -419,6 +523,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     };
 
     const actAt = (p, pointerEvent = null) => {
+        if (terminalRef.current) return;
         if (game.held !== null) {
             placeRice(p);
             return;
@@ -447,8 +552,18 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     };
 
     Object.assign(riceApiRef.current, {
-        getAnswer: () => riceRef.current.length,
-        checkAnswer: (guess) => guess === riceRef.current.length,
+        verifyGuess: async (guess) => {
+            if (terminalRef.current || !proofRef.current) return false;
+            const proof = await proofRef.current;
+            const digest = await deriveAnswerProof(
+                guess,
+                proof.salt,
+                proof.nonce,
+            );
+            const correct = digest === proof.digest;
+            if (correct) terminalRef.current = true;
+            return correct;
+        },
         action: () => actAt(pointerRef.current),
         moveAim: (dx, dy) => {
             const pointer = pointerRef.current;
@@ -608,6 +723,8 @@ export default function Home() {
     const [elapsed, setElapsed] = useState(0);
     const [result, setResult] = useState(null);
     const [revealedAnswer, setRevealedAnswer] = useState(null);
+    const [checking, setChecking] = useState(false);
+    const [forfeitRequest, setForfeitRequest] = useState(0);
     const [scores, setScores] = useState([]);
     const [rankMode, setRankMode] = useState('easy');
     const [giveUpStep, setGiveUpStep] = useState(0);
@@ -666,6 +783,8 @@ export default function Home() {
         setElapsed(0);
         setResult(null);
         setRevealedAnswer(null);
+        setChecking(false);
+        setForfeitRequest(0);
         setGiveUpStep(0);
         setGame({
             id: Date.now(),
@@ -680,12 +799,20 @@ export default function Home() {
         setScreen('game');
     };
 
-    const submit = () => {
+    const submit = async () => {
+        if (checking || result) return;
         const guess = Number(digits.join(''));
-        if (riceApiRef.current?.checkAnswer(guess)) {
+        setChecking(true);
+        let correct = false;
+        try {
+            correct = await riceApiRef.current?.verifyGuess(guess);
+        } finally {
+            setChecking(false);
+        }
+        if (correct) {
             const finalTime = (Date.now() - game.startedAt) / 1000;
             setElapsed(finalTime);
-            setRevealedAnswer(riceApiRef.current.getAnswer());
+            setRevealedAnswer(guess);
             setResult('success');
             if (user) {
                 recordGameResult({
@@ -711,9 +838,9 @@ export default function Home() {
     const giveUp = () => {
         const finalTime = (Date.now() - game.startedAt) / 1000;
         setElapsed(finalTime);
-        setRevealedAnswer(riceApiRef.current?.getAnswer() ?? null);
         setGiveUpStep(0);
-        setResult('giveup');
+        setResult('giveup-pending');
+        setForfeitRequest((request) => request + 1);
         if (user) {
             recordGameResult({
                 difficulty: game.difficulty,
@@ -724,6 +851,11 @@ export default function Home() {
             setSavedGame(null);
         }
     };
+
+    const resolveForfeit = useCallback((answer) => {
+        setRevealedAnswer(answer);
+        setResult('giveup');
+    }, []);
 
     const register = async () => {
         const playerName = user
@@ -769,6 +901,8 @@ export default function Home() {
         setElapsed(savedGame.elapsed);
         setResult(null);
         setRevealedAnswer(null);
+        setChecking(false);
+        setForfeitRequest(0);
         setGiveUpStep(0);
         setSaveStatus('');
         setGame({
@@ -1122,6 +1256,8 @@ export default function Home() {
                             game={game}
                             setGame={setGame}
                             riceApiRef={riceApiRef}
+                            forfeitRequest={forfeitRequest}
+                            onForfeitResolved={resolveForfeit}
                         />
                         <MobileControls riceApiRef={riceApiRef} />
                         <div className="controls-note">
@@ -1163,8 +1299,11 @@ export default function Home() {
                                 </div>
                             ))}
                         </div>
-                        <button className="primary full" onClick={submit}>
-                            정답 확인
+                        <button
+                            className="primary full"
+                            onClick={submit}
+                            disabled={checking || Boolean(result)}>
+                            {checking ? '검증 중...' : '정답 확인'}
                         </button>
                         <button
                             className="text-button give-up"
