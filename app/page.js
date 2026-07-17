@@ -1312,7 +1312,16 @@ export default function Home() {
                     </small>
                 </section>
             )}
-            <footer>© 2026 RICE COUNT · A QUIET COUNTING GAME</footer>
+            <footer>
+                © 2026{' '}
+                <a
+                    href="https://github.com/NLessW"
+                    target="_blank"
+                    rel="noreferrer">
+                    NLESSW
+                </a>{' '}
+                · RICE COUNT
+            </footer>
         </main>
     );
 }

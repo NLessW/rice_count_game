@@ -95,6 +95,8 @@ h1 em::after { content:""; position:absolute; left:-5%; right:-5%; bottom:4px; h
 .saved-game-card h3 { margin:8px 0 0; font-size:24px; }
 .saved-game-card .primary { margin:0; }
 footer { text-align:center; padding:25px; font:500 8px Montserrat; letter-spacing:3px; color:var(--muted); }
+footer a { color:inherit; text-underline-offset:3px; }
+footer a:hover { color:var(--red); }
 @media (max-width:800px) {
   .topbar { height:70px; } nav { gap:14px; font-size:13px; }
   .hero { align-items:flex-start; padding-top:12vh; } .hero-copy { width:100%; } .hero-copy br { display:none; }
