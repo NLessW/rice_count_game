@@ -40,9 +40,9 @@ h1 em::after { content:""; position:absolute; left:-5%; right:-5%; bottom:4px; h
 .mode-card p { color:var(--muted); }
 .mode-card i { display:block; margin-top:45px; color:var(--red); font-style:normal; }
 .game-layout { height:calc(100vh - 88px); display:grid; grid-template-columns:1fr 330px; }
-.game-stage { position:relative; min-width:0; background:linear-gradient(145deg,#5e432b,#9b744e 48%,#69472c); overflow:hidden; }
+.game-stage { position:relative; min-width:0; background:linear-gradient(145deg,#5e432b,#9b744e 48%,#69472c); overflow:hidden; overscroll-behavior:none; }
 .game-stage::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:.25; background-image:repeating-linear-gradient(90deg,transparent 0 80px,#302012 81px,#c5966322 82px); }
-.game-canvas { width:100%; height:100%; display:block; position:relative; z-index:1; touch-action:none; cursor:none; }
+.game-canvas { width:100%; height:100%; display:block; position:relative; z-index:1; touch-action:none; overscroll-behavior:none; cursor:none; }
 .game-hud { position:absolute; z-index:3; top:25px; left:28px; right:28px; color:white; display:flex; justify-content:space-between; font-family:Montserrat; letter-spacing:2px; pointer-events:none; text-shadow:0 2px 6px #0008; }
 .game-hud strong { font-size:22px; }
 .controls-note { position:absolute; z-index:3; bottom:22px; left:50%; transform:translateX(-50%); color:#fff; background:#25180da6; padding:10px 18px; font-size:12px; white-space:nowrap; }

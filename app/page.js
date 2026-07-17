@@ -437,8 +437,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             onPointerDown={onDown}
             onPointerUp={onUp}
             onWheel={(event) => {
-                if (game.held === null) return;
                 event.preventDefault();
+                if (game.held === null) return;
                 setGame((g) => ({
                     ...g,
                     heldRotation:
