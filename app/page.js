@@ -123,7 +123,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 rice.place === 'bowl'
                     ? currentGame.bowl.y * rect.height + rice.by * bowlRy
                     : rice.y * rect.height;
-            if (Math.hypot(clickX - x, clickY - y) <= 6) return { rice, x, y };
+            if (Math.hypot(clickX - x, clickY - y) <= 8) return { rice, x, y };
         }
 
         return null;
@@ -162,7 +162,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             target.shadowColor = selected ? '#2699e8' : 'rgba(80,55,20,.2)';
             target.shadowBlur = selected ? 12 : 2;
             target.beginPath();
-            target.ellipse(0, 0, 4.2, 1.65, 0, 0, Math.PI * 2);
+            target.ellipse(0, 0, 5.6, 2.2, 0, 0, Math.PI * 2);
             target.fill();
             target.restore();
         };
@@ -236,7 +236,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             ctx.translate(target.x, target.y);
             ctx.rotate(target.rice.rotation);
             ctx.beginPath();
-            ctx.ellipse(0, 0, 7.5, 4, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, 8.5, 4.2, 0, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
         }
@@ -255,8 +255,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             ctx.ellipse(
                 pointer.x * w,
                 pointer.y * h,
-                5.2,
-                2.4,
+                6.6,
+                3,
                 game.heldRotation,
                 0,
                 Math.PI * 2,
@@ -404,6 +404,16 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                     y: Math.max(0.08, Math.min(0.98, g.pointer.y + dy)),
                 },
             })),
+        moveBowl: (dx, dy) => {
+            sceneDirtyRef.current = true;
+            setGame((g) => {
+                const bowl = {
+                    x: Math.max(0.22, Math.min(0.78, g.bowl.x + dx)),
+                    y: Math.max(0.25, Math.min(0.78, g.bowl.y + dy)),
+                };
+                return { ...g, bowl, pointer: bowl };
+            });
+        },
         rotate: (amount) =>
             setGame((g) =>
                 g.held === null
@@ -442,14 +452,20 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
 function MobileControls({ riceApiRef }) {
     const directionRef = useRef({ x: 0, y: 0 });
     const rotatingRef = useRef(false);
+    const bowlModeRef = useRef(false);
     const [knob, setKnob] = useState({ x: 0, y: 0 });
+    const [bowlMode, setBowlMode] = useState(false);
 
     useEffect(() => {
         let frame;
         const tick = () => {
             const direction = directionRef.current;
             if (direction.x || direction.y) {
-                riceApiRef.current?.moveAim(direction.x * 0.006, direction.y * 0.006);
+                const method = bowlModeRef.current ? 'moveBowl' : 'moveAim';
+                riceApiRef.current?.[method](
+                    direction.x * 0.006,
+                    direction.y * 0.006,
+                );
             }
             if (rotatingRef.current) riceApiRef.current?.rotate(0.07);
             frame = requestAnimationFrame(tick);
@@ -496,6 +512,16 @@ function MobileControls({ riceApiRef }) {
                 />
             </div>
             <div className="mobile-actions">
+                <button
+                    className={`bowl-control${bowlMode ? ' active' : ''}`}
+                    onPointerDown={(event) => {
+                        event.preventDefault();
+                        const next = !bowlModeRef.current;
+                        bowlModeRef.current = next;
+                        setBowlMode(next);
+                    }}>
+                    ◉<small>그릇 이동</small>
+                </button>
                 <button
                     className="rotate-control"
                     onPointerDown={(event) => {

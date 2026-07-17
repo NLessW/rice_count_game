@@ -111,10 +111,11 @@ footer { text-align:center; padding:25px; font:500 8px Montserrat; letter-spacin
   .joystick::before { width:1px; top:12px; bottom:12px; left:50%; }
   .joystick::after { height:1px; left:12px; right:12px; top:50%; }
   .joystick-knob { position:absolute; z-index:1; width:48px; height:48px; left:28px; top:28px; border-radius:50%; background:linear-gradient(145deg,#e7d4b9,#8c623d); border:2px solid #fff8; box-shadow:0 5px 12px #0008; }
-  .mobile-actions { display:flex; align-items:flex-end; gap:12px; pointer-events:auto; }
-  .mobile-actions button { width:72px; height:72px; padding:0; border-radius:50%; border:1px solid #ffffff88; color:white; background:#2a1a0dc9; box-shadow:0 7px 20px #0005; touch-action:none; font-size:24px; font-weight:700; }
+  .mobile-actions { display:flex; align-items:flex-end; gap:8px; pointer-events:auto; }
+  .mobile-actions button { width:64px; height:64px; padding:0; border-radius:50%; border:1px solid #ffffff88; color:white; background:#2a1a0dc9; box-shadow:0 7px 20px #0005; touch-action:none; font-size:22px; font-weight:700; }
   .mobile-actions button:active { transform:scale(.94); background:#b43b28dd; }
   .mobile-actions small { display:block; font-size:8px; font-weight:400; letter-spacing:-.3px; }
-  .mobile-actions .action-control { width:84px; height:84px; background:#a33725e8; font-size:17px; }
+  .mobile-actions .action-control { width:76px; height:76px; background:#a33725e8; font-size:17px; }
+  .mobile-actions .bowl-control.active { color:#1f160e; background:#8edcff; border-color:#d9f5ff; box-shadow:0 0 20px #39c8ffaa; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none!important; } }
