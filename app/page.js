@@ -23,6 +23,7 @@ const MODES = {
 };
 
 const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const CHOPSTICK_ANIMATION_MS = 700;
 const formatTime = (seconds) => {
     const wholeSeconds = Math.floor(seconds);
     return `${String(Math.floor(wholeSeconds / 3600)).padStart(2, '0')}:${String(Math.floor((wholeSeconds % 3600) / 60)).padStart(2, '0')}:${String(wholeSeconds % 60).padStart(2, '0')}`;
@@ -228,7 +229,10 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
         const actionElapsed = game.chopstickAction
             ? Date.now() - game.chopstickAction
             : 999;
-        const actionProgress = Math.min(actionElapsed / 320, 1);
+        const actionProgress = Math.min(
+            actionElapsed / CHOPSTICK_ANIMATION_MS,
+            1,
+        );
         const actionAmount =
             actionProgress < 1 ? Math.sin(actionProgress * Math.PI) : 0;
         const tipDrop = actionAmount * 18;
@@ -313,7 +317,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             paint();
             if (
                 game.chopstickAction &&
-                Date.now() - game.chopstickAction < 320
+                Date.now() - game.chopstickAction < CHOPSTICK_ANIMATION_MS
             ) {
                 frame = requestAnimationFrame(render);
             }
