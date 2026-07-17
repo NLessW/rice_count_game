@@ -225,6 +225,14 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
         ctx.drawImage(scene, 0, 0, w, h);
 
         const pointer = game.pointer;
+        const actionElapsed = game.chopstickAction
+            ? Date.now() - game.chopstickAction
+            : 999;
+        const actionProgress = Math.min(actionElapsed / 320, 1);
+        const actionAmount =
+            actionProgress < 1 ? Math.sin(actionProgress * Math.PI) : 0;
+        const tipDrop = actionAmount * 18;
+        const stickGap = 7 - actionAmount * 3.5;
         const target =
             game.held === null ? findRiceAt(pointer, game, rect) : null;
         if (target) {
@@ -245,7 +253,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             drawRice(
                 ctx,
                 pointer.x * w,
-                pointer.y * h,
+                pointer.y * h - 21 + tipDrop,
                 game.heldRotation,
                 true,
             );
@@ -290,12 +298,14 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
         ctx.strokeStyle = '#6d4b27';
         ctx.lineWidth = 7;
         ctx.lineCap = 'round';
-        [-7, 7].forEach((dx) => {
+        [-stickGap, stickGap].forEach((dx) => {
             ctx.beginPath();
-            ctx.moveTo(pointer.x * w + dx - 35, pointer.y * h - 144);
-            ctx.lineTo(pointer.x * w + dx, pointer.y * h - 24);
+            ctx.moveTo(pointer.x * w + dx + 42, pointer.y * h - 144 + tipDrop * 0.15);
+            ctx.lineTo(pointer.x * w + dx, pointer.y * h - 24 + tipDrop);
             ctx.stroke();
         });
+
+        if (actionProgress < 1) requestAnimationFrame(() => paint());
     }, [game]);
 
     useEffect(() => {
@@ -333,7 +343,12 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 { rotation: g.heldRotation },
             );
 
-            return { ...g, held: null, moved: g.moved + (inBowl ? 0 : 1) };
+            return {
+                ...g,
+                held: null,
+                moved: g.moved + (inBowl ? 0 : 1),
+                chopstickAction: Date.now(),
+            };
         });
     };
 
@@ -391,6 +406,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 held: rice.id,
                 heldRotation: rice.rotation,
                 moved: wasOnDesk ? Math.max(0, g.moved - 1) : g.moved,
+                chopstickAction: Date.now(),
             }));
         }
     };
