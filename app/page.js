@@ -364,6 +364,10 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             canvasRef.current.setPointerCapture(event.pointerId);
             return;
         }
+        actAt(p, event);
+    };
+
+    const actAt = (p, pointerEvent = null) => {
         if (game.held !== null) {
             placeRice(p);
             return;
@@ -376,8 +380,10 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             const wasOnDesk = rice.place === 'desk';
             rice.place = 'held';
             sceneDirtyRef.current = true;
-            dragRef.current = { type: 'rice', start: p, moved: false };
-            canvasRef.current.setPointerCapture(event.pointerId);
+            if (pointerEvent) {
+                dragRef.current = { type: 'rice', start: p, moved: false };
+                canvasRef.current.setPointerCapture(pointerEvent.pointerId);
+            }
             setGame((g) => ({
                 ...g,
                 pointer: p,
@@ -387,6 +393,24 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             }));
         }
     };
+
+    Object.assign(riceApiRef.current, {
+        action: () => actAt(game.pointer),
+        moveAim: (dx, dy) =>
+            setGame((g) => ({
+                ...g,
+                pointer: {
+                    x: Math.max(0.02, Math.min(0.98, g.pointer.x + dx)),
+                    y: Math.max(0.08, Math.min(0.98, g.pointer.y + dy)),
+                },
+            })),
+        rotate: (amount) =>
+            setGame((g) =>
+                g.held === null
+                    ? g
+                    : { ...g, heldRotation: g.heldRotation + amount },
+            ),
+    });
 
     const onUp = (event) => {
         if (dragRef.current?.type === 'rice' && dragRef.current.moved) {
@@ -412,6 +436,86 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 }));
             }}
         />
+    );
+}
+
+function MobileControls({ riceApiRef }) {
+    const directionRef = useRef({ x: 0, y: 0 });
+    const rotatingRef = useRef(false);
+    const [knob, setKnob] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        let frame;
+        const tick = () => {
+            const direction = directionRef.current;
+            if (direction.x || direction.y) {
+                riceApiRef.current?.moveAim(direction.x * 0.006, direction.y * 0.006);
+            }
+            if (rotatingRef.current) riceApiRef.current?.rotate(0.07);
+            frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(frame);
+    }, [riceApiRef]);
+
+    const moveStick = (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - (rect.left + rect.width / 2);
+        const y = event.clientY - (rect.top + rect.height / 2);
+        const distance = Math.hypot(x, y);
+        const radius = 34;
+        const scale = distance > radius ? radius / distance : 1;
+        const next = { x: x * scale, y: y * scale };
+        setKnob(next);
+        directionRef.current = { x: next.x / radius, y: next.y / radius };
+    };
+
+    const releaseStick = () => {
+        directionRef.current = { x: 0, y: 0 };
+        setKnob({ x: 0, y: 0 });
+    };
+
+    return (
+        <div className="mobile-controls">
+            <div
+                className="joystick"
+                onPointerDown={(event) => {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    moveStick(event);
+                }}
+                onPointerMove={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                        moveStick(event);
+                    }
+                }}
+                onPointerUp={releaseStick}
+                onPointerCancel={releaseStick}>
+                <span
+                    className="joystick-knob"
+                    style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }}
+                />
+            </div>
+            <div className="mobile-actions">
+                <button
+                    className="rotate-control"
+                    onPointerDown={(event) => {
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        rotatingRef.current = true;
+                    }}
+                    onPointerUp={() => (rotatingRef.current = false)}
+                    onPointerCancel={() => (rotatingRef.current = false)}>
+                    ↻<small>누르고 회전</small>
+                </button>
+                <button
+                    className="action-control"
+                    onPointerDown={(event) => {
+                        event.preventDefault();
+                        riceApiRef.current?.action();
+                    }}>
+                    집기<small>놓기</small>
+                </button>
+            </div>
+        </div>
     );
 }
 
@@ -936,6 +1040,7 @@ export default function Home() {
                             setGame={setGame}
                             riceApiRef={riceApiRef}
                         />
+                        <MobileControls riceApiRef={riceApiRef} />
                         <div className="controls-note">
                             드래그 또는 클릭: 집기/놓기 · 휠: 쌀알 회전 ·
                             Shift+드래그: 그릇 이동

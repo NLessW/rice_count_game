@@ -46,6 +46,7 @@ h1 em::after { content:""; position:absolute; left:-5%; right:-5%; bottom:4px; h
 .game-hud { position:absolute; z-index:3; top:25px; left:28px; right:28px; color:white; display:flex; justify-content:space-between; font-family:Montserrat; letter-spacing:2px; pointer-events:none; text-shadow:0 2px 6px #0008; }
 .game-hud strong { font-size:22px; }
 .controls-note { position:absolute; z-index:3; bottom:22px; left:50%; transform:translateX(-50%); color:#fff; background:#25180da6; padding:10px 18px; font-size:12px; white-space:nowrap; }
+.mobile-controls { display:none; }
 .answer-panel { padding:7vh 28px; text-align:center; background:#f5f1e8; position:relative; z-index:4; }
 .digits { display:flex; gap:5px; justify-content:center; margin:45px 0 25px; }
 .digit { border-bottom:1px solid #aaa092; display:flex; flex-direction:column; }
@@ -103,6 +104,17 @@ footer { text-align:center; padding:25px; font:500 8px Montserrat; letter-spacin
   .saved-game-card { align-items:stretch; flex-direction:column; } .saved-game-card .primary { width:100%; }
   .game-layout { height:auto; min-height:calc(100vh - 70px); grid-template-columns:1fr; grid-template-rows:58vh auto; }
   .answer-panel { padding:35px 20px; } .answer-panel h2 { margin-bottom:15px; }
-  .controls-note { font-size:9px; bottom:10px; }
+  .controls-note { display:none; }
+  .mobile-controls { position:absolute; z-index:6; left:18px; right:18px; bottom:18px; display:flex; align-items:flex-end; justify-content:space-between; pointer-events:none; user-select:none; -webkit-user-select:none; }
+  .joystick { width:106px; height:106px; border:1px solid #ffffff66; border-radius:50%; background:#1d130b99; box-shadow:inset 0 0 24px #0005,0 8px 25px #0004; position:relative; touch-action:none; pointer-events:auto; }
+  .joystick::before,.joystick::after { content:""; position:absolute; background:#ffffff25; }
+  .joystick::before { width:1px; top:12px; bottom:12px; left:50%; }
+  .joystick::after { height:1px; left:12px; right:12px; top:50%; }
+  .joystick-knob { position:absolute; z-index:1; width:48px; height:48px; left:28px; top:28px; border-radius:50%; background:linear-gradient(145deg,#e7d4b9,#8c623d); border:2px solid #fff8; box-shadow:0 5px 12px #0008; }
+  .mobile-actions { display:flex; align-items:flex-end; gap:12px; pointer-events:auto; }
+  .mobile-actions button { width:72px; height:72px; padding:0; border-radius:50%; border:1px solid #ffffff88; color:white; background:#2a1a0dc9; box-shadow:0 7px 20px #0005; touch-action:none; font-size:24px; font-weight:700; }
+  .mobile-actions button:active { transform:scale(.94); background:#b43b28dd; }
+  .mobile-actions small { display:block; font-size:8px; font-weight:400; letter-spacing:-.3px; }
+  .mobile-actions .action-control { width:84px; height:84px; background:#a33725e8; font-size:17px; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none!important; } }
