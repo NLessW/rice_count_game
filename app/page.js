@@ -250,6 +250,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                 true,
             );
             ctx.strokeStyle = 'rgba(53,171,255,.8)';
+            ctx.lineWidth = 0.8;
             ctx.setLineDash([5, 5]);
             ctx.beginPath();
             ctx.ellipse(
