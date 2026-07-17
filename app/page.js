@@ -305,12 +305,22 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             ctx.stroke();
         });
 
-        if (actionProgress < 1) requestAnimationFrame(() => paint());
     }, [game]);
 
     useEffect(() => {
-        paint();
-    }, [paint]);
+        let frame;
+        const render = () => {
+            paint();
+            if (
+                game.chopstickAction &&
+                Date.now() - game.chopstickAction < 320
+            ) {
+                frame = requestAnimationFrame(render);
+            }
+        };
+        render();
+        return () => cancelAnimationFrame(frame);
+    }, [paint, game.chopstickAction]);
 
     const point = (event) => {
         const rect = canvasRef.current.getBoundingClientRect();
