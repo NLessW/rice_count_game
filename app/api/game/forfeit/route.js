@@ -2,6 +2,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
 import { getAdminDb, getUserFromToken } from '@/lib/firebaseAdmin';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
     try {
         const { sessionId, idToken } = await request.json();
@@ -51,7 +54,8 @@ export async function POST(request) {
         }
 
         return NextResponse.json(result);
-    } catch {
+    } catch (error) {
+        console.error('game/forfeit failed', error);
         return NextResponse.json(
             { error: 'server-unavailable' },
             { status: 503 },

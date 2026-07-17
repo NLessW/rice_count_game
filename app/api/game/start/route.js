@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { getAdminDb, getUserFromToken } from '@/lib/firebaseAdmin';
 import { createRiceGame, GAME_MODES } from '@/lib/gameServer';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request) {
     try {
         const { difficulty, idToken } = await request.json();
@@ -34,7 +37,8 @@ export async function POST(request) {
             startedAt,
             riceData: game.riceData,
         });
-    } catch {
+    } catch (error) {
+        console.error('game/start failed', error);
         return NextResponse.json(
             { error: 'server-unavailable' },
             { status: 503 },
