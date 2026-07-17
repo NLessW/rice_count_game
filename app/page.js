@@ -699,7 +699,7 @@ export default function Home() {
                         <div className="sun" />
                         <img
                             className="bowl-image"
-                            src="/images/rice-bowl-hero.png"
+                            src="images/rice-bowl-hero.png"
                             alt=""
                         />
                         <div className="sticks-art" />
