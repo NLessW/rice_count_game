@@ -48,6 +48,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     const sceneDirtyRef = useRef(true);
     const dragRef = useRef(null);
     const riceRef = useRef([]);
+    const pointerRef = useRef(game.pointer);
+    const paintFrameRef = useRef(null);
 
     riceApiRef.current = {
         serialize: () =>
@@ -66,6 +68,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
 
     useEffect(() => {
         if (!game) return;
+        pointerRef.current = game.pointer;
         if (game.riceData?.length) {
             riceRef.current = Array.from(
                 { length: game.riceData.length / 4 },
@@ -160,8 +163,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             target.translate(x, y);
             target.rotate(rotation);
             target.fillStyle = selected ? '#9edcff' : '#fffcef';
-            target.shadowColor = selected ? '#2699e8' : 'rgba(80,55,20,.2)';
-            target.shadowBlur = selected ? 12 : 2;
+            target.shadowColor = selected ? '#2699e8' : 'transparent';
+            target.shadowBlur = selected ? 12 : 0;
             target.beginPath();
             target.ellipse(0, 0, 7, 2.8, 0, 0, Math.PI * 2);
             target.fill();
@@ -225,7 +228,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
 
         ctx.drawImage(scene, 0, 0, w, h);
 
-        const pointer = game.pointer;
+        const pointer = pointerRef.current;
         const actionElapsed = game.chopstickAction
             ? Date.now() - game.chopstickAction
             : 999;
@@ -311,6 +314,14 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
 
     }, [game]);
 
+    const queuePaint = () => {
+        if (paintFrameRef.current !== null) return;
+        paintFrameRef.current = requestAnimationFrame(() => {
+            paintFrameRef.current = null;
+            paint();
+        });
+    };
+
     useEffect(() => {
         let frame;
         const render = () => {
@@ -323,7 +334,13 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             }
         };
         render();
-        return () => cancelAnimationFrame(frame);
+        return () => {
+            cancelAnimationFrame(frame);
+            if (paintFrameRef.current !== null) {
+                cancelAnimationFrame(paintFrameRef.current);
+                paintFrameRef.current = null;
+            }
+        };
     }, [paint, game.chopstickAction]);
 
     const point = (event) => {
@@ -370,6 +387,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
         const p = point(event);
         if (dragRef.current === 'bowl') {
             sceneDirtyRef.current = true;
+            pointerRef.current = p;
             setGame((g) => ({ ...g, bowl: p, pointer: p }));
         } else {
             if (
@@ -381,7 +399,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             ) {
                 dragRef.current.moved = true;
             }
-            setGame((g) => ({ ...g, pointer: p }));
+            pointerRef.current = p;
+            queuePaint();
         }
     };
 
@@ -426,15 +445,16 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     };
 
     Object.assign(riceApiRef.current, {
-        action: () => actAt(game.pointer),
-        moveAim: (dx, dy) =>
-            setGame((g) => ({
-                ...g,
-                pointer: {
-                    x: Math.max(0.02, Math.min(0.98, g.pointer.x + dx)),
-                    y: Math.max(0.08, Math.min(0.98, g.pointer.y + dy)),
-                },
-            })),
+        action: () => actAt(pointerRef.current),
+        moveAim: (dx, dy) => {
+            const pointer = pointerRef.current;
+            pointerRef.current = {
+                x: Math.max(0.02, Math.min(0.98, pointer.x + dx)),
+                y: Math.max(0.08, Math.min(0.98, pointer.y + dy)),
+            };
+            queuePaint();
+        },
+        getPointer: () => pointerRef.current,
         moveBowl: (dx, dy) => {
             sceneDirtyRef.current = true;
             setGame((g) => {
@@ -442,6 +462,7 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
                     x: Math.max(0.22, Math.min(0.78, g.bowl.x + dx)),
                     y: Math.max(0.25, Math.min(0.78, g.bowl.y + dy)),
                 };
+                pointerRef.current = bowl;
                 return { ...g, bowl, pointer: bowl };
             });
         },
@@ -723,7 +744,7 @@ export default function Home() {
                 answer: game.answer,
                 elapsed: Number(currentElapsed.toFixed(3)),
                 bowl: game.bowl,
-                pointer: game.pointer,
+                pointer: riceApiRef.current.getPointer(),
                 held: game.held,
                 heldRotation: game.heldRotation,
                 moved: game.moved,
