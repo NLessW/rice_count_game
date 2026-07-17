@@ -4,16 +4,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     firebaseEnabled,
     clearGameState,
+    forfeitGameSession,
     loadGameState,
     loadMyResults,
     loadScores,
     logIn,
     logOut,
     observeAuth,
-    recordGameResult,
-    saveScore,
+    registerGameSessionScore,
     saveGameState,
     signUp,
+    startGameSession,
+    submitGameGuess,
 } from '@/lib/firebase';
 
 const MODES = {
@@ -22,70 +24,8 @@ const MODES = {
     hard: { label: '어려움', range: '4,000–8,000', min: 4000, max: 8000 },
 };
 
-const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const CHOPSTICK_ANIMATION_MS = 700;
 const RICE_SLOT_COUNT = 8000;
-const PBKDF2_ITERATIONS = 180000;
-const VERIFY_MIN_INTERVAL_MS = 900;
-
-const bytesToHex = (bytes) =>
-    Array.from(new Uint8Array(bytes), (byte) =>
-        byte.toString(16).padStart(2, '0'),
-    ).join('');
-
-async function deriveAnswerProof(guess, salt, nonce) {
-    const key = await crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(`${guess}:${nonce}`),
-        'PBKDF2',
-        false,
-        ['deriveBits'],
-    );
-    return bytesToHex(
-        await crypto.subtle.deriveBits(
-            {
-                name: 'PBKDF2',
-                hash: 'SHA-256',
-                salt,
-                iterations: PBKDF2_ITERATIONS,
-            },
-            key,
-            256,
-        ),
-    );
-}
-
-function wait(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function createAnswerVerifier(answer) {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const nonce = `${Date.now()}:${crypto.getRandomValues(new Uint32Array(1))[0]}`;
-    const expectedDigest = deriveAnswerProof(answer, salt, nonce);
-    let lastCheckAt = 0;
-    let checking = false;
-
-    return async (guess) => {
-        if (checking) return false;
-
-        const remainingDelay =
-            VERIFY_MIN_INTERVAL_MS - (Date.now() - lastCheckAt);
-        if (remainingDelay > 0) await wait(remainingDelay);
-
-        checking = true;
-        lastCheckAt = Date.now();
-        try {
-            const [expected, actual] = await Promise.all([
-                expectedDigest,
-                deriveAnswerProof(guess, salt, nonce),
-            ]);
-            return actual === expected;
-        } finally {
-            checking = false;
-        }
-    };
-}
 const formatTime = (seconds) => {
     const wholeSeconds = Math.floor(seconds);
     return `${String(Math.floor(wholeSeconds / 3600)).padStart(2, '0')}:${String(Math.floor((wholeSeconds % 3600) / 60)).padStart(2, '0')}:${String(wholeSeconds % 60).padStart(2, '0')}`;
@@ -118,7 +58,6 @@ function RiceCanvas({
     const riceRef = useRef([]);
     const pointerRef = useRef(game.pointer);
     const paintFrameRef = useRef(null);
-    const verifierRef = useRef(null);
     const terminalRef = useRef(false);
     const animationLockUntilRef = useRef(0);
 
@@ -202,56 +141,17 @@ function RiceCanvas({
                 });
             }
             riceRef.current = restored;
-            const restoredCount = restored.reduce(
-                (count, rice) => count + (rice.place === 'void' ? 0 : 1),
-                0,
-            );
-            verifierRef.current = createAnswerVerifier(restoredCount);
             sceneDirtyRef.current = true;
             return;
         }
-        const mode = MODES[game.difficulty];
-        const riceCount = random(mode.min, mode.max);
-        const seeded = Array.from({ length: RICE_SLOT_COUNT }, (_, id) => {
-            if (id >= riceCount) {
-                return {
-                    id,
-                    x: Math.random(),
-                    y: Math.random(),
-                    rotation: Math.random() * Math.PI,
-                    place: 'void',
-                };
-            }
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.sqrt(Math.random()) * 0.82;
-            return {
-                id,
-                bx: Math.cos(angle) * radius,
-                by: Math.sin(angle) * radius,
-                rotation: Math.random() * Math.PI,
-                place: 'bowl',
-            };
-        });
-        for (let index = seeded.length - 1; index > 0; index -= 1) {
-            const swapIndex = random(0, index);
-            [seeded[index], seeded[swapIndex]] = [seeded[swapIndex], seeded[index]];
-        }
-        seeded.forEach((rice, id) => {
-            rice.id = id;
-        });
-        riceRef.current = seeded;
-        verifierRef.current = createAnswerVerifier(riceCount);
+        riceRef.current = [];
         sceneDirtyRef.current = true;
     }, [game?.id, game?.riceData]);
 
     useEffect(() => {
         if (!forfeitRequest || terminalRef.current) return;
         terminalRef.current = true;
-        const answer = riceRef.current.reduce(
-            (count, rice) => count + (rice.place === 'void' ? 0 : 1),
-            0,
-        );
-        onForfeitResolved(answer);
+        onForfeitResolved();
     }, [forfeitRequest, onForfeitResolved]);
 
     const findRiceAt = (p, currentGame, rect) => {
@@ -600,11 +500,8 @@ function RiceCanvas({
     };
 
     Object.assign(riceApiRef.current, {
-        verifyGuess: async (guess) => {
-            if (terminalRef.current || !verifierRef.current) return false;
-            const correct = await verifierRef.current(guess);
-            if (correct) terminalRef.current = true;
-            return correct;
+        finish: () => {
+            terminalRef.current = true;
         },
         action: () => actAt(pointerRef.current),
         moveAim: (dx, dy) => {
@@ -769,6 +666,8 @@ export default function Home() {
     const [result, setResult] = useState(null);
     const [revealedAnswer, setRevealedAnswer] = useState(null);
     const [checking, setChecking] = useState(false);
+    const [startBusy, setStartBusy] = useState(false);
+    const [startError, setStartError] = useState('');
     const [forfeitRequest, setForfeitRequest] = useState(0);
     const [scores, setScores] = useState([]);
     const [rankMode, setRankMode] = useState('easy');
@@ -823,7 +722,20 @@ export default function Home() {
         if (screen === 'rank') refreshScores();
     }, [screen, refreshScores]);
 
-    const start = (difficulty) => {
+    const start = async (difficulty) => {
+        if (startBusy) return;
+        setStartBusy(true);
+        setStartError('');
+        let session;
+        try {
+            session = await startGameSession(difficulty);
+        } catch {
+            setStartError(
+                'Vercel 서버 세션을 만들지 못했습니다. 환경 변수를 확인해 주세요.',
+            );
+            setStartBusy(false);
+            return;
+        }
         setDigits([0, 0, 0, 0]);
         setElapsed(0);
         setResult(null);
@@ -832,39 +744,40 @@ export default function Home() {
         setForfeitRequest(0);
         setGiveUpStep(0);
         setGame({
-            id: Date.now(),
+            id: session.sessionId,
+            sessionId: session.sessionId,
             difficulty,
-            startedAt: Date.now(),
+            startedAt: session.startedAt,
             bowl: { x: 0.48, y: 0.52 },
             pointer: { x: 0.72, y: 0.38 },
             held: null,
             heldRotation: 0,
             moved: 0,
+            riceData: session.riceData,
         });
         setScreen('game');
+        setStartBusy(false);
     };
 
     const submit = async () => {
         if (checking || result) return;
         const guess = Number(digits.join(''));
         setChecking(true);
-        let correct = false;
+        let response = null;
         try {
-            correct = await riceApiRef.current?.verifyGuess(guess);
+            response = await submitGameGuess(game.sessionId, guess);
+        } catch {
+            response = { correct: false };
         } finally {
             setChecking(false);
         }
-        if (correct) {
-            const finalTime = (Date.now() - game.startedAt) / 1000;
+        if (response?.correct) {
+            const finalTime = response.seconds;
             setElapsed(finalTime);
             setRevealedAnswer(guess);
             setResult('success');
+            riceApiRef.current?.finish();
             if (user) {
-                recordGameResult({
-                    difficulty: game.difficulty,
-                    won: true,
-                    seconds: finalTime,
-                }).catch(() => {});
                 clearGameState(user.uid).catch(() => {});
                 setSavedGame(null);
             }
@@ -880,38 +793,45 @@ export default function Home() {
         }
     };
 
-    const giveUp = () => {
-        const finalTime = (Date.now() - game.startedAt) / 1000;
-        setElapsed(finalTime);
+    const giveUp = async () => {
+        if (checking || result) return;
+        setChecking(true);
+        let response;
+        try {
+            response = await forfeitGameSession(game.sessionId);
+        } catch {
+            setChecking(false);
+            setGiveUpStep(0);
+            setResult('wrong');
+            setTimeout(
+                () =>
+                    setResult((current) =>
+                        current === 'wrong' ? null : current,
+                    ),
+                1200,
+            );
+            return;
+        }
+        setChecking(false);
+        setElapsed(response.seconds);
         setGiveUpStep(0);
-        setResult('giveup-pending');
+        setRevealedAnswer(response.answer);
+        setResult('giveup');
         setForfeitRequest((request) => request + 1);
         if (user) {
-            recordGameResult({
-                difficulty: game.difficulty,
-                won: false,
-                seconds: finalTime,
-            }).catch(() => {});
             clearGameState(user.uid).catch(() => {});
             setSavedGame(null);
         }
     };
 
-    const resolveForfeit = useCallback((answer) => {
-        setRevealedAnswer(answer);
-        setResult('giveup');
-    }, []);
+    const resolveForfeit = useCallback(() => {}, []);
 
     const register = async () => {
         const playerName = user
             ? user.displayName || user.email?.split('@')[0] || '관찰자'
             : guestName.trim();
         if (!playerName) return;
-        await saveScore({
-            name: playerName,
-            difficulty: game.difficulty,
-            seconds: elapsed,
-        });
+        await registerGameSessionScore(game.sessionId, playerName);
         setRankMode(game.difficulty);
         setGuestName('');
         setScreen('rank');
@@ -924,6 +844,7 @@ export default function Home() {
             const currentElapsed = (Date.now() - game.startedAt) / 1000;
             const state = {
                 difficulty: game.difficulty,
+                sessionId: game.sessionId,
                 elapsed: Number(currentElapsed.toFixed(3)),
                 bowl: game.bowl,
                 pointer: riceApiRef.current.getPointer(),
@@ -942,6 +863,13 @@ export default function Home() {
 
     const resumeSavedGame = () => {
         if (!savedGame) return;
+        if (!savedGame.sessionId) {
+            setStartError(
+                '이전 방식의 저장 데이터는 서버 검증 세션이 없어 이어갈 수 없습니다. 새 게임을 시작해 주세요.',
+            );
+            setScreen('difficulty');
+            return;
+        }
         setDigits([0, 0, 0, 0]);
         setElapsed(savedGame.elapsed);
         setResult(null);
@@ -952,6 +880,7 @@ export default function Home() {
         setSaveStatus('');
         setGame({
             id: Date.now(),
+            sessionId: savedGame.sessionId,
             difficulty: savedGame.difficulty,
             startedAt: Date.now() - savedGame.elapsed * 1000,
             bowl: savedGame.bowl,
@@ -1116,14 +1045,16 @@ export default function Home() {
                         {Object.entries(MODES).map(([key, mode], index) => (
                             <button
                                 className="mode-card"
+                                disabled={startBusy}
                                 key={key}
                                 onClick={() => start(key)}>
                                 <span>0{index + 1}</span>
                                 <h3>{mode.label}</h3>
-                                <i>선택 →</i>
+                                <i>{startBusy ? '준비 중...' : '선택 →'}</i>
                             </button>
                         ))}
                     </div>
+                    {startError && <div className="toast">{startError}</div>}
                     <button
                         className="text-button"
                         onClick={() => setScreen('home')}>

@@ -9,25 +9,14 @@ npm install
 npm run dev
 ```
 
-Firebase를 설정하지 않아도 브라우저 `localStorage`에 랭킹이 저장됩니다. 전 세계 랭킹을 사용하려면 `.env.example`을 `.env.local`로 복사해 Firebase Web App 값을 채우고 Firestore를 활성화하세요.
+서버 검증과 전 세계 랭킹은 Firebase Auth/Firestore와 Vercel API Routes를 사용합니다. `.env.example`을 `.env.local`로 복사해 Firebase Web App 값과 Admin SDK 서비스 계정 값을 채우세요.
 
 Firestore에는 `rankings` 컬렉션을 사용합니다. 난이도별 조회를 처음 실행할 때 콘솔에 표시되는 링크에서 `difficulty ASC, seconds ASC` 복합 색인을 생성해야 합니다.
 
-개발용 보안 규칙 예시:
+Firestore 보안 규칙은 브라우저에서 `rankings`, `gameResults`, `gameSessions`를 직접 쓰지 못하게 막고, Vercel API Route가 Admin SDK로만 기록하도록 구성합니다.
 
-```txt
-match /rankings/{score} {
-  allow read: if true;
-  allow create: if
-    request.resource.data.name is string &&
-    request.resource.data.name.size() <= 12 &&
-    request.resource.data.difficulty in ['easy', 'normal', 'hard'] &&
-    request.resource.data.seconds is number &&
-    request.resource.data.seconds > 0;
-  allow update, delete: if false;
-}
-```
+## Vercel
 
-## GitHub Pages
+이 프로젝트는 Next.js API Routes를 사용하므로 Vercel 배포가 필요합니다. GitHub Pages 정적 export 배포는 더 이상 사용하지 않습니다.
 
-저장소의 Settings → Pages → Source를 **GitHub Actions**로 설정하세요. `main` 브랜치에 push하면 `.github/workflows/deploy.yml`이 정적 사이트를 빌드하고 배포합니다. Firebase 값은 저장소의 Settings → Secrets and variables → Actions에 같은 이름으로 등록하세요.
+Vercel Project Settings → Environment Variables에 `.env.example`의 값을 등록하세요. `FIREBASE_PRIVATE_KEY`는 서비스 계정 JSON의 `private_key` 값을 그대로 넣되 줄바꿈은 `\n` 문자열로 들어가도 앱에서 처리합니다.
