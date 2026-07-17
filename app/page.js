@@ -97,6 +97,22 @@ function RiceCanvas({
     const paintFrameRef = useRef(null);
     const proofRef = useRef(null);
     const terminalRef = useRef(false);
+    const animationLockUntilRef = useRef(0);
+
+    const isChopstickAnimating = (currentGame = game) =>
+        Boolean(
+            Date.now() < animationLockUntilRef.current ||
+            currentGame?.chopstickAction &&
+                Date.now() - currentGame.chopstickAction <
+                    CHOPSTICK_ANIMATION_MS,
+        );
+
+    const lockChopstickAnimation = (startedAt) => {
+        animationLockUntilRef.current = Math.max(
+            animationLockUntilRef.current,
+            startedAt + CHOPSTICK_ANIMATION_MS,
+        );
+    };
 
     riceApiRef.current = {
         serialize: () =>
@@ -460,7 +476,10 @@ function RiceCanvas({
     const placeRice = (p) => {
         const rect = canvasRef.current.getBoundingClientRect();
         const grain = { x: p.x, y: p.y };
+        const actionStartedAt = Date.now();
 
+        pointerRef.current = grain;
+        lockChopstickAnimation(actionStartedAt);
         sceneDirtyRef.current = true;
         setGame((g) => {
             if (!g || g.held === null) return g;
@@ -482,14 +501,16 @@ function RiceCanvas({
 
             return {
                 ...g,
+                pointer: grain,
                 held: null,
                 moved: g.moved + (inBowl ? 0 : 1),
-                chopstickAction: Date.now(),
+                chopstickAction: actionStartedAt,
             };
         });
     };
 
     const onMove = (event) => {
+        if (isChopstickAnimating()) return;
         const p = point(event);
         if (dragRef.current === 'bowl') {
             sceneDirtyRef.current = true;
@@ -511,6 +532,7 @@ function RiceCanvas({
     };
 
     const onDown = (event) => {
+        if (isChopstickAnimating()) return;
         const p = point(event);
         const dx = p.x - game.bowl.x;
         const dy = p.y - game.bowl.y;
@@ -523,7 +545,7 @@ function RiceCanvas({
     };
 
     const actAt = (p, pointerEvent = null) => {
-        if (terminalRef.current) return;
+        if (terminalRef.current || isChopstickAnimating()) return;
         if (game.held !== null) {
             placeRice(p);
             return;
@@ -533,8 +555,11 @@ function RiceCanvas({
         const rice = target?.rice;
 
         if (rice) {
+            const actionStartedAt = Date.now();
             const wasOnDesk = rice.place === 'desk';
             rice.place = 'held';
+            pointerRef.current = p;
+            lockChopstickAnimation(actionStartedAt);
             sceneDirtyRef.current = true;
             if (pointerEvent) {
                 dragRef.current = { type: 'rice', start: p, moved: false };
@@ -546,7 +571,7 @@ function RiceCanvas({
                 held: rice.id,
                 heldRotation: rice.rotation,
                 moved: wasOnDesk ? Math.max(0, g.moved - 1) : g.moved,
-                chopstickAction: Date.now(),
+                chopstickAction: actionStartedAt,
             }));
         }
     };
@@ -566,6 +591,7 @@ function RiceCanvas({
         },
         action: () => actAt(pointerRef.current),
         moveAim: (dx, dy) => {
+            if (isChopstickAnimating()) return;
             const pointer = pointerRef.current;
             pointerRef.current = {
                 x: Math.max(0.02, Math.min(0.98, pointer.x + dx)),
@@ -575,8 +601,10 @@ function RiceCanvas({
         },
         getPointer: () => pointerRef.current,
         moveBowl: (dx, dy) => {
+            if (isChopstickAnimating()) return;
             sceneDirtyRef.current = true;
             setGame((g) => {
+                if (isChopstickAnimating(g)) return g;
                 const bowl = {
                     x: Math.max(0.22, Math.min(0.78, g.bowl.x + dx)),
                     y: Math.max(0.25, Math.min(0.78, g.bowl.y + dy)),
