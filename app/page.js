@@ -26,6 +26,7 @@ const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const CHOPSTICK_ANIMATION_MS = 700;
 const RICE_SLOT_COUNT = 8000;
 const PBKDF2_ITERATIONS = 180000;
+const VERIFY_MIN_INTERVAL_MS = 900;
 
 const bytesToHex = (bytes) =>
     Array.from(new Uint8Array(bytes), (byte) =>
@@ -54,13 +55,35 @@ async function deriveAnswerProof(guess, salt, nonce) {
     );
 }
 
-async function createAnswerProof(answer) {
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createAnswerVerifier(answer) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const nonce = `${Date.now()}:${crypto.getRandomValues(new Uint32Array(1))[0]}`;
-    return {
-        salt,
-        nonce,
-        digest: await deriveAnswerProof(answer, salt, nonce),
+    const expectedDigest = deriveAnswerProof(answer, salt, nonce);
+    let lastCheckAt = 0;
+    let checking = false;
+
+    return async (guess) => {
+        if (checking) return false;
+
+        const remainingDelay =
+            VERIFY_MIN_INTERVAL_MS - (Date.now() - lastCheckAt);
+        if (remainingDelay > 0) await wait(remainingDelay);
+
+        checking = true;
+        lastCheckAt = Date.now();
+        try {
+            const [expected, actual] = await Promise.all([
+                expectedDigest,
+                deriveAnswerProof(guess, salt, nonce),
+            ]);
+            return actual === expected;
+        } finally {
+            checking = false;
+        }
     };
 }
 const formatTime = (seconds) => {
@@ -95,7 +118,7 @@ function RiceCanvas({
     const riceRef = useRef([]);
     const pointerRef = useRef(game.pointer);
     const paintFrameRef = useRef(null);
-    const proofRef = useRef(null);
+    const verifierRef = useRef(null);
     const terminalRef = useRef(false);
     const animationLockUntilRef = useRef(0);
 
@@ -183,7 +206,7 @@ function RiceCanvas({
                 (count, rice) => count + (rice.place === 'void' ? 0 : 1),
                 0,
             );
-            proofRef.current = createAnswerProof(restoredCount);
+            verifierRef.current = createAnswerVerifier(restoredCount);
             sceneDirtyRef.current = true;
             return;
         }
@@ -217,7 +240,7 @@ function RiceCanvas({
             rice.id = id;
         });
         riceRef.current = seeded;
-        proofRef.current = createAnswerProof(riceCount);
+        verifierRef.current = createAnswerVerifier(riceCount);
         sceneDirtyRef.current = true;
     }, [game?.id, game?.riceData]);
 
@@ -578,14 +601,8 @@ function RiceCanvas({
 
     Object.assign(riceApiRef.current, {
         verifyGuess: async (guess) => {
-            if (terminalRef.current || !proofRef.current) return false;
-            const proof = await proofRef.current;
-            const digest = await deriveAnswerProof(
-                guess,
-                proof.salt,
-                proof.nonce,
-            );
-            const correct = digest === proof.digest;
+            if (terminalRef.current || !verifierRef.current) return false;
+            const correct = await verifierRef.current(guess);
             if (correct) terminalRef.current = true;
             return correct;
         },
