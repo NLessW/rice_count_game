@@ -94,7 +94,9 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
             sceneDirtyRef.current = true;
             return;
         }
-        const seeded = Array.from({ length: game.answer }, (_, id) => {
+        const mode = MODES[game.difficulty];
+        const riceCount = random(mode.min, mode.max);
+        const seeded = Array.from({ length: riceCount }, (_, id) => {
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.sqrt(Math.random()) * 0.82;
             return {
@@ -445,6 +447,8 @@ function RiceCanvas({ game, setGame, riceApiRef }) {
     };
 
     Object.assign(riceApiRef.current, {
+        getAnswer: () => riceRef.current.length,
+        checkAnswer: (guess) => guess === riceRef.current.length,
         action: () => actAt(pointerRef.current),
         moveAim: (dx, dy) => {
             const pointer = pointerRef.current;
@@ -603,6 +607,7 @@ export default function Home() {
     const [digits, setDigits] = useState([0, 0, 0, 0]);
     const [elapsed, setElapsed] = useState(0);
     const [result, setResult] = useState(null);
+    const [revealedAnswer, setRevealedAnswer] = useState(null);
     const [scores, setScores] = useState([]);
     const [rankMode, setRankMode] = useState('easy');
     const [giveUpStep, setGiveUpStep] = useState(0);
@@ -657,15 +662,14 @@ export default function Home() {
     }, [screen, refreshScores]);
 
     const start = (difficulty) => {
-        const mode = MODES[difficulty];
         setDigits([0, 0, 0, 0]);
         setElapsed(0);
         setResult(null);
+        setRevealedAnswer(null);
         setGiveUpStep(0);
         setGame({
             id: Date.now(),
             difficulty,
-            answer: random(mode.min, mode.max),
             startedAt: Date.now(),
             bowl: { x: 0.48, y: 0.52 },
             pointer: { x: 0.72, y: 0.38 },
@@ -678,9 +682,10 @@ export default function Home() {
 
     const submit = () => {
         const guess = Number(digits.join(''));
-        if (guess === game.answer) {
+        if (riceApiRef.current?.checkAnswer(guess)) {
             const finalTime = (Date.now() - game.startedAt) / 1000;
             setElapsed(finalTime);
+            setRevealedAnswer(riceApiRef.current.getAnswer());
             setResult('success');
             if (user) {
                 recordGameResult({
@@ -706,6 +711,7 @@ export default function Home() {
     const giveUp = () => {
         const finalTime = (Date.now() - game.startedAt) / 1000;
         setElapsed(finalTime);
+        setRevealedAnswer(riceApiRef.current?.getAnswer() ?? null);
         setGiveUpStep(0);
         setResult('giveup');
         if (user) {
@@ -741,7 +747,6 @@ export default function Home() {
             const currentElapsed = (Date.now() - game.startedAt) / 1000;
             const state = {
                 difficulty: game.difficulty,
-                answer: game.answer,
                 elapsed: Number(currentElapsed.toFixed(3)),
                 bowl: game.bowl,
                 pointer: riceApiRef.current.getPointer(),
@@ -763,12 +768,12 @@ export default function Home() {
         setDigits([0, 0, 0, 0]);
         setElapsed(savedGame.elapsed);
         setResult(null);
+        setRevealedAnswer(null);
         setGiveUpStep(0);
         setSaveStatus('');
         setGame({
             id: Date.now(),
             difficulty: savedGame.difficulty,
-            answer: savedGame.answer,
             startedAt: Date.now() - savedGame.elapsed * 1000,
             bowl: savedGame.bowl,
             pointer: savedGame.pointer,
@@ -1227,7 +1232,7 @@ export default function Home() {
                                         ? '정답입니다'
                                         : '정답은'}
                                 </p>
-                                <h2>{game.answer.toLocaleString()}톨</h2>
+                                <h2>{revealedAnswer?.toLocaleString()}톨</h2>
                                 {result === 'success' ? (
                                     <>
                                         <p>
