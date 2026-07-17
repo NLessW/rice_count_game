@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
-import { adminDb, getUserFromToken } from '@/lib/firebaseAdmin';
+import { getAdminDb, getUserFromToken } from '@/lib/firebaseAdmin';
 import { createRiceGame, GAME_MODES } from '@/lib/gameServer';
 
 export async function POST(request) {
@@ -14,6 +14,7 @@ export async function POST(request) {
         }
 
         const user = await getUserFromToken(idToken);
+        const adminDb = getAdminDb();
         const game = createRiceGame(difficulty);
         const startedAt = Date.now();
 

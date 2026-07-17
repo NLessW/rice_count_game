@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
-import { adminDb, getUserFromToken } from '@/lib/firebaseAdmin';
+import { getAdminDb, getUserFromToken } from '@/lib/firebaseAdmin';
 
 export async function POST(request) {
     try {
@@ -10,6 +10,7 @@ export async function POST(request) {
         }
 
         const user = await getUserFromToken(idToken);
+        const adminDb = getAdminDb();
         const sessionRef = adminDb.collection('gameSessions').doc(sessionId);
         const result = await adminDb.runTransaction(async (transaction) => {
             const snapshot = await transaction.get(sessionRef);
